@@ -38,7 +38,7 @@ router.beforeEach((to, from, next) => {
 // 全局路由后置守卫
 router.afterEach((to, from) => {
     // 动态设置页面 Titile
-    let title = (to.meta.title ? to.meta.title : '') + ' - 程序猿小萨'
+    let title = (to.meta.title ? to.meta.title : '') + ' - North001'
     document.title = title
 
     // 隐藏页面加载 Loading
