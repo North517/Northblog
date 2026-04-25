@@ -30,39 +30,53 @@
             </div>
 
             <!-- 分页列表 -->
-            <el-table :data="tableData" border stripe style="width: 100%" v-loading="tableLoading">
-                <el-table-column prop="id" label="ID" width="50" />
-                <el-table-column prop="title" label="标题" width="380" />
-                <el-table-column prop="cover" label="封面" width="180">
+            <el-table :data="tableData" border stripe size="small" class="article-admin-table" style="width: 100%" v-loading="tableLoading">
+                <el-table-column prop="id" label="ID" width="60" align="center" />
+                <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
+                <el-table-column prop="cover" label="封面" width="105" align="center">
                     <template #default="scope">
-                        <el-image style="width: 100px;" :src="scope.row.cover" />
+                        <el-image style="width: 72px; height: 40px;" fit="cover" :src="scope.row.cover" />
                     </template>
                 </el-table-column>
-                <el-table-column prop="isTop" label="是否置顶" width="100">
+                <el-table-column prop="isPrivate" label="可见性" width="88" align="center">
                     <template #default="scope">
-                        <el-switch @change="handleIsTopChange(scope.row)" v-model="scope.row.isTop" inline-prompt
-                            :active-icon="Check" :inactive-icon="Close" />
-                    </template>
-                </el-table-column>
-                <el-table-column prop="createTime" label="发布时间" width="180" />
-                <el-table-column label="操作">
-                    <template #default="scope">
-                        <el-button size="small" @click="showArticleUpdateEditor(scope.row)">
+                        <el-button text :type="scope.row.isPrivate ? 'info' : 'success'" @click="handlePrivacyChange(scope.row)">
                             <el-icon class="mr-1">
-                                <Edit />
+                                <Hide v-if="scope.row.isPrivate" />
+                                <View v-else />
                             </el-icon>
-                            编辑</el-button>
-                        <el-button size="small" @click="goArticleDetailPage(scope.row.id)">
-                            <el-icon class="mr-1">
-                                <View />
-                            </el-icon>
-                            预览</el-button>
-                        <el-button type="danger" size="small" @click="deleteArticleSubmit(scope.row)">
-                            <el-icon class="mr-1">
-                                <Delete />
-                            </el-icon>
-                            删除
+                            {{ scope.row.isPrivate ? '私密' : '公开' }}
                         </el-button>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="type" label="状态" width="82" align="center">
+                    <template #default="scope">
+                        <el-tag :type="scope.row.type === 1 ? 'success' : 'info'">
+                            {{ scope.row.type === 1 ? '已发布' : '草稿' }}
+                        </el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="createTime" label="创建时间" width="150" />
+                <el-table-column label="操作" width="210" fixed="right" align="center">
+                    <template #default="scope">
+                        <div class="article-table-actions">
+                            <el-button size="small" @click="showArticleUpdateEditor(scope.row)">
+                                <el-icon class="mr-1">
+                                    <Edit />
+                                </el-icon>
+                                编辑</el-button>
+                            <el-button size="small" @click="goArticleDetailPage(scope.row.id)">
+                                <el-icon class="mr-1">
+                                    <View />
+                                </el-icon>
+                                预览</el-button>
+                            <el-button type="danger" size="small" @click="deleteArticleSubmit(scope.row)">
+                                <el-icon class="mr-1">
+                                    <Delete />
+                                </el-icon>
+                                删除
+                            </el-button>
+                        </div>
                     </template>
                 </el-table-column>
             </el-table>
@@ -89,6 +103,9 @@
                         <!-- 靠右对齐 -->
                         <div class="ml-auto flex">
                             <el-button @click="isArticlePublishEditorShow = false">取消</el-button>
+                            <el-button @click="saveDraftSubmit">
+                                保存
+                            </el-button>
                             <el-button type="primary" @click="publishArticleSubmit">
                                 <el-icon class="mr-1">
                                     <Promotion />
@@ -107,7 +124,9 @@
                 </el-form-item>
                 <el-form-item label="内容" prop="content">
                     <!-- Markdown 编辑器 -->
-                    <MdEditor v-model="form.content" @onUploadImg="onUploadImg" editorId="publishArticleEditor" />
+                    <div class="article-md-editor" @paste.capture="handlePublishEditorPaste">
+                        <MdEditor v-model="form.content" @onUploadImg="onUploadImg" editorId="publishArticleEditor" />
+                    </div>
                 </el-form-item>
                 <el-form-item label="封面" prop="cover">
                     <el-upload class="avatar-uploader" action="#" :on-change="handleCoverChange" :auto-upload="false"
@@ -121,6 +140,9 @@
                 <el-form-item label="摘要" prop="summary">
                     <!-- :rows="3" 指定 textarea 默认显示 3 行 -->
                     <el-input v-model="form.summary" :rows="3" type="textarea" placeholder="请输入文章摘要" />
+                </el-form-item>
+                <el-form-item label="是否置顶">
+                    <el-switch v-model="form.isTop" inline-prompt active-text="置顶" inactive-text="不置顶" />
                 </el-form-item>
                 <el-form-item label="分类" prop="categoryId">
                     <el-select v-model="form.categoryId" clearable placeholder="---请选择---" size="large">
@@ -154,11 +176,14 @@
                         <!-- 靠右对齐 -->
                         <div class="ml-auto flex">
                             <el-button @click="isArticleUpdateEditorShow = false">取消</el-button>
+                            <el-button @click="updateDraftSubmit">
+                                保存
+                            </el-button>
                             <el-button type="primary" @click="updateSubmit">
                                 <el-icon class="mr-1">
                                     <Promotion />
                                 </el-icon>
-                                保存
+                                发布
                             </el-button>
                         </div>
                     </div>
@@ -173,8 +198,10 @@
                 </el-form-item>
                 <el-form-item label="内容" prop="content">
                     <!-- Markdown 编辑器 -->
-                    <MdEditor v-model="updateArticleForm.content" @onUploadImg="onUploadImg"
-                        editorId="updateArticleEditor" />
+                    <div class="article-md-editor" @paste.capture="handleUpdateEditorPaste">
+                        <MdEditor v-model="updateArticleForm.content" @onUploadImg="onUploadImg"
+                            editorId="updateArticleEditor" />
+                    </div>
                 </el-form-item>
                 <el-form-item label="封面" prop="cover">
                     <el-upload class="avatar-uploader" action="#" :on-change="handleUpdateCoverChange"
@@ -188,6 +215,9 @@
                 <el-form-item label="摘要" prop="summary">
                     <!-- :rows="3" 指定 textarea 默认显示 3 行 -->
                     <el-input v-model="updateArticleForm.summary" :rows="3" type="textarea" placeholder="请输入文章摘要" />
+                </el-form-item>
+                <el-form-item label="是否置顶">
+                    <el-switch v-model="updateArticleForm.isTop" inline-prompt active-text="置顶" inactive-text="不置顶" />
                 </el-form-item>
                 <el-form-item label="分类" prop="categoryId">
                     <el-select v-model="updateArticleForm.categoryId" clearable placeholder="---请选择---" size="large">
@@ -211,13 +241,12 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { Search, RefreshRight, Check, Close } from '@element-plus/icons-vue'
-import { getArticlePageList, deleteArticle, publishArticle, getArticleDetail, updateArticle } from '@/api/admin/article'
+import { ref, reactive, nextTick } from 'vue'
+import { Search, RefreshRight, View, Hide } from '@element-plus/icons-vue'
+import { getArticlePageList, deleteArticle, publishArticle, getArticleDetail, updateArticle, updateArticlePrivacy } from '@/api/admin/article'
 import { uploadFile } from '@/api/admin/file'
 import { getCategorySelectList } from '@/api/admin/category'
 import { searchTags, getTagSelectList } from '@/api/admin/tag'
-import { updateArticleIsTop } from '@/api/admin/article'
 import moment from 'moment'
 import { showMessage, showModel } from '@/composables/util'
 import { MdEditor } from 'md-editor-v3'
@@ -353,7 +382,10 @@ const form = reactive({
     cover: '',
     categoryId: null,
     tags: [],
-    summary: ""
+    summary: "",
+    isPublish: false,
+    isPrivate: false,
+    isTop: false
 })
 
 // 修改文章表单对象
@@ -364,7 +396,10 @@ const updateArticleForm = reactive({
     cover: '',
     categoryId: null,
     tags: [],
-    summary: ""
+    summary: "",
+    isPublish: false,
+    isPrivate: false,
+    isTop: false
 })
 
 // 表单校验规则
@@ -419,23 +454,104 @@ const handleUpdateCoverChange = (file) => {
     })
 }
 
-// 编辑器图片上传
+// 上传单个图片文件
+const uploadImageFile = async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const res = await uploadFile(formData)
+    if (res.success == false) {
+        showMessage(res.message || '图片上传失败', 'error')
+        return null
+    }
+
+    return res.data.url
+}
+
+// 编辑器工具栏图片上传
 const onUploadImg = async (files, callback) => {
-    const res = await Promise.all(
-        files.map((file) => {
-            return new Promise((rev, rej) => {
-                console.log('==> 编辑器开始上传文件...')
-                let formData = new FormData()
-                formData.append("file", file);
-                uploadFile(formData).then((res) => {
-                    console.log(res)
-                    console.log('访问路径：' + res.data.url)
-                    // 调用 callback 函数，回显上传图片
-                    callback([res.data.url]);
-                })
-            });
-        })
-    );
+    try {
+        const urls = await Promise.all(files.map(uploadImageFile))
+        callback(urls.filter(Boolean))
+    } catch (error) {
+        console.error(error)
+        showMessage('图片上传失败，请稍后重试', 'error')
+    }
+}
+
+const getPasteImageFiles = (event) => {
+    const items = Array.from(event.clipboardData?.items || [])
+    return items
+        .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter(Boolean)
+}
+
+const getEditorTextarea = (editorId) => {
+    const editor = document.getElementById(editorId)
+    return editor?.querySelector('textarea') || document.activeElement
+}
+
+const insertMarkdownAtCursor = async (targetForm, editorId, markdownText, selectionStart, selectionEnd) => {
+    const content = targetForm.content || ''
+    const start = typeof selectionStart === 'number' ? selectionStart : content.length
+    const end = typeof selectionEnd === 'number' ? selectionEnd : start
+
+    const prefix = start > 0 && !content.slice(0, start).endsWith('\n') ? '\n' : ''
+    const suffix = content.slice(end).startsWith('\n') ? '' : '\n'
+    const insertText = `${prefix}${markdownText}${suffix}`
+
+    targetForm.content = content.slice(0, start) + insertText + content.slice(end)
+
+    await nextTick()
+    const textarea = getEditorTextarea(editorId)
+    if (textarea && typeof textarea.focus === 'function') {
+        const cursorPosition = start + insertText.length
+        textarea.focus()
+        if (typeof textarea.setSelectionRange === 'function') {
+            textarea.setSelectionRange(cursorPosition, cursorPosition)
+        }
+    }
+}
+
+const handleEditorPasteImage = async (event, targetForm, editorId) => {
+    const imageFiles = getPasteImageFiles(event)
+    if (!imageFiles.length) {
+        return
+    }
+
+    event.preventDefault()
+
+    const textarea = getEditorTextarea(editorId)
+    const selectionStart = textarea && typeof textarea.selectionStart === 'number'
+        ? textarea.selectionStart
+        : (targetForm.content || '').length
+    const selectionEnd = textarea && typeof textarea.selectionEnd === 'number'
+        ? textarea.selectionEnd
+        : selectionStart
+
+    try {
+        showMessage('图片上传中...')
+        const urls = (await Promise.all(imageFiles.map(uploadImageFile))).filter(Boolean)
+        if (!urls.length) {
+            return
+        }
+
+        const markdownText = urls.map((url) => `![图片](${url})`).join('\n')
+        await insertMarkdownAtCursor(targetForm, editorId, markdownText, selectionStart, selectionEnd)
+        showMessage('图片已插入')
+    } catch (error) {
+        console.error(error)
+        showMessage('图片上传失败，请稍后重试', 'error')
+    }
+}
+
+const handlePublishEditorPaste = (event) => {
+    handleEditorPasteImage(event, form, 'publishArticleEditor')
+}
+
+const handleUpdateEditorPaste = (event) => {
+    handleEditorPasteImage(event, updateArticleForm, 'updateArticleEditor')
 }
 
 // 文章分类
@@ -472,8 +588,23 @@ const remoteMethod = (query) => {
     }
 }
 
+const validateDraftFields = (formData, formRef, submit) => {
+    if (!formData.title || formData.title.length < 1 || formData.title.length > 40) {
+        formRef.value.validateField('title')
+        return
+    }
+
+    if (!formData.content) {
+        formRef.value.validateField('content')
+        return
+    }
+
+    submit()
+}
+
 // 发布文章
 const publishArticleSubmit = () => {
+    form.isPublish = true
     // isArticlePublishEditorShow.value = true
     console.log('提交 md 内容：' + form.content)
     // 校验表单
@@ -501,12 +632,42 @@ const publishArticleSubmit = () => {
             form.summary = ''
             form.categoryId = null
             form.tags = []
+            form.isPublish = false
+            form.isPrivate = false
+            form.isTop = false
             // 重新请求分页接口，渲染列表数据
             getTableData()
         })
     })
 }
 
+
+// 保存草稿
+const saveDraftSubmit = () => {
+    form.isPublish = false
+    validateDraftFields(form, publishArticleFormRef, () => {
+        publishArticle(form).then((res) => {
+            if (res.success == false) {
+                let message = res.message
+                showMessage(message, 'error')
+                return
+            }
+
+            showMessage('保存成功')
+            isArticlePublishEditorShow.value = false
+            form.title = ''
+            form.content = ''
+            form.cover = ''
+            form.summary = ''
+            form.categoryId = null
+            form.tags = []
+            form.isPublish = false
+            form.isPrivate = false
+            form.isTop = false
+            getTableData()
+        })
+    })
+}
 
 // 是否显示编辑文章对话框
 const isArticleUpdateEditorShow = ref(false)
@@ -528,12 +689,16 @@ const showArticleUpdateEditor = (row) => {
             updateArticleForm.categoryId = res.data.categoryId
             updateArticleForm.tags = res.data.tagIds
             updateArticleForm.summary = res.data.summary
+            updateArticleForm.isPublish = res.data.type === 1
+            updateArticleForm.isPrivate = res.data.isPrivate
+            updateArticleForm.isTop = res.data.isTop
         }
     })
 }
 
-// 保存文章
+// 发布文章
 const updateSubmit = () => {
+    updateArticleForm.isPublish = true
     console.log('tijiao')
     updateArticleFormRef.value.validate((valid) => {
         // 校验表单
@@ -551,7 +716,7 @@ const updateSubmit = () => {
                 return
             }
 
-            showMessage('保存成功')
+            showMessage('发布成功')
             // 隐藏编辑框
             isArticleUpdateEditorShow.value = false
             // 重新请求分页接口，渲染列表数据
@@ -561,33 +726,59 @@ const updateSubmit = () => {
 }
 
 
+// 保存文章草稿
+const updateDraftSubmit = () => {
+    updateArticleForm.isPublish = false
+    validateDraftFields(updateArticleForm, updateArticleFormRef, () => {
+        updateArticle(updateArticleForm).then((res) => {
+            if (res.success == false) {
+                let message = res.message
+                showMessage(message, 'error')
+                return
+            }
+
+            showMessage('保存成功')
+            isArticleUpdateEditorShow.value = false
+            getTableData()
+        })
+    })
+}
+
 // 跳转文章详情页
 const goArticleDetailPage = (articleId) => {
     router.push('/article/' + articleId)
 }
 
 
-// 点击置顶事件
-const handleIsTopChange = (row) => {
-    updateArticleIsTop({ id: row.id, isTop: row.isTop }).then((res) => {
-        // 重新请求分页接口，渲染列表数据
-        getTableData()
-
+// 点击公开/私密切换事件
+const handlePrivacyChange = (row) => {
+    updateArticlePrivacy({ id: row.id, isPrivate: !row.isPrivate }).then((res) => {
         if (res.success == false) {
-            // 获取服务端返回的错误消息
             let message = res.message
-            // 提示错误消息
             showMessage(message, 'error')
             return
         }
 
-        showMessage(row.isTop ? '置顶成功' : "已取消置顶")
+        row.isPrivate = !row.isPrivate
+        showMessage(row.isPrivate ? '已设为私密' : '已设为公开')
     })
 }
 
 </script>
 
 <style scoped>
+.article-table-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.article-table-actions .el-button + .el-button {
+    margin-left: 0;
+}
+
 /* 封面图片样式 */
 .avatar-uploader .avatar {
     width: 200px;

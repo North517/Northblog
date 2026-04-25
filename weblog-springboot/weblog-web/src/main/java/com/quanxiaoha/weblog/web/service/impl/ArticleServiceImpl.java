@@ -6,6 +6,7 @@ import com.google.common.collect.Lists;
 import com.quanxiaoha.weblog.admin.event.ReadArticleEvent;
 import com.quanxiaoha.weblog.common.domain.dos.*;
 import com.quanxiaoha.weblog.common.domain.mapper.*;
+import com.quanxiaoha.weblog.common.enums.ArticleTypeEnum;
 import com.quanxiaoha.weblog.common.enums.ResponseCodeEnum;
 import com.quanxiaoha.weblog.common.exception.BizException;
 import com.quanxiaoha.weblog.common.utils.PageResponse;
@@ -20,6 +21,9 @@ import com.quanxiaoha.weblog.web.utils.MarkdownStatsUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -65,8 +69,8 @@ public class ArticleServiceImpl implements ArticleService {
         Long current = findIndexArticlePageListReqVO.getCurrent();
         Long size = findIndexArticlePageListReqVO.getSize();
 
-        // 第一步：分页查询文章主体记录
-        Page<ArticleDO> articleDOPage = articleMapper.selectPageList(current, size, null, null, null);
+        // 第一步：分页查询已发布文章主体记录
+        Page<ArticleDO> articleDOPage = articleMapper.selectPageList(current, size, null, null, null, ArticleTypeEnum.NORMAL.getValue());
 
         // 返回的分页数据
         List<ArticleDO> articleDOS = articleDOPage.getRecords();
@@ -160,9 +164,11 @@ public class ArticleServiceImpl implements ArticleService {
 
         ArticleDO articleDO = articleMapper.selectById(articleId);
 
-        // 判断文章是否存在
-        if (Objects.isNull(articleDO)) {
-            log.warn("==> 该文章不存在, articleId: {}", articleId);
+        // 判断文章是否存在、未发布，或当前访问者无权查看私密文章
+        if (Objects.isNull(articleDO)
+                || !Objects.equals(articleDO.getType(), ArticleTypeEnum.NORMAL.getValue())
+                || (Boolean.TRUE.equals(articleDO.getIsPrivate()) && !isCurrentUserAdmin())) {
+            log.warn("==> 该文章不存在、未发布或无权访问, articleId: {}", articleId);
             throw new BizException(ResponseCodeEnum.ARTICLE_NOT_FOUND);
         }
 
@@ -202,7 +208,7 @@ public class ArticleServiceImpl implements ArticleService {
         vo.setTags(tagVOS);
 
         // 上一篇
-        ArticleDO preArticleDO = articleMapper.selectPreArticle(articleId);
+        ArticleDO preArticleDO = articleMapper.selectPrePublishedArticle(articleId);
         if (Objects.nonNull(preArticleDO)) {
             FindPreNextArticleRspVO preArticleVO = FindPreNextArticleRspVO.builder()
                     .articleId(preArticleDO.getId())
@@ -212,7 +218,7 @@ public class ArticleServiceImpl implements ArticleService {
         }
 
         // 下一篇
-        ArticleDO nextArticleDO = articleMapper.selectNextArticle(articleId);
+        ArticleDO nextArticleDO = articleMapper.selectNextPublishedArticle(articleId);
         if (Objects.nonNull(nextArticleDO)) {
             FindPreNextArticleRspVO nextArticleVO = FindPreNextArticleRspVO.builder()
                     .articleId(nextArticleDO.getId())
@@ -225,5 +231,16 @@ public class ArticleServiceImpl implements ArticleService {
         eventPublisher.publishEvent(new ReadArticleEvent(this, articleId));
 
         return Response.success(vo);
+    }
+
+    private boolean isCurrentUserAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (Objects.isNull(authentication) || !authentication.isAuthenticated()) {
+            return false;
+        }
+
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch("ROLE_ADMIN"::equals);
     }
 }

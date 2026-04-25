@@ -29,3 +29,8 @@ export function updateArticle(data) {
 export function updateArticleIsTop(data) {
     return axios.post("/admin/article/isTop/update", data)
 }
+
+// 更新文章公开私密状态
+export function updateArticlePrivacy(data) {
+    return axios.post("/admin/article/privacy/update", data)
+}

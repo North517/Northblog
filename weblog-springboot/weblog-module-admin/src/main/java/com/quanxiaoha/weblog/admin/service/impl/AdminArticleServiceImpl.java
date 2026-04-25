@@ -11,6 +11,7 @@ import com.quanxiaoha.weblog.admin.model.vo.article.*;
 import com.quanxiaoha.weblog.admin.service.AdminArticleService;
 import com.quanxiaoha.weblog.common.domain.dos.*;
 import com.quanxiaoha.weblog.common.domain.mapper.*;
+import com.quanxiaoha.weblog.common.enums.ArticleTypeEnum;
 import com.quanxiaoha.weblog.common.enums.ResponseCodeEnum;
 import com.quanxiaoha.weblog.common.exception.BizException;
 import com.quanxiaoha.weblog.common.utils.PageResponse;
@@ -21,6 +22,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -87,6 +89,33 @@ public class AdminArticleServiceImpl implements AdminArticleService {
     }
 
     /**
+     * 更新文章公开私密状态
+     *
+     * @param updateArticlePrivacyReqVO
+     * @return
+     */
+    @Override
+    public Response updateArticlePrivacy(UpdateArticlePrivacyReqVO updateArticlePrivacyReqVO) {
+        Long articleId = updateArticlePrivacyReqVO.getId();
+        Boolean isPrivate = updateArticlePrivacyReqVO.getIsPrivate();
+
+        int count = articleMapper.updateById(ArticleDO.builder()
+                .id(articleId)
+                .isPrivate(isPrivate)
+                .updateTime(LocalDateTime.now())
+                .build());
+
+        if (count == 0) {
+            log.warn("==> 该文章不存在, articleId: {}", articleId);
+            throw new BizException(ResponseCodeEnum.ARTICLE_NOT_FOUND);
+        }
+
+        eventPublisher.publishEvent(new UpdateArticleEvent(this, articleId));
+
+        return Response.success();
+    }
+
+    /**
      * 发布文章
      *
      * @param publishArticleReqVO
@@ -95,11 +124,27 @@ public class AdminArticleServiceImpl implements AdminArticleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Response publishArticle(PublishArticleReqVO publishArticleReqVO) {
+        Integer articleType = Boolean.TRUE.equals(publishArticleReqVO.getIsPublish())
+                ? ArticleTypeEnum.NORMAL.getValue()
+                : ArticleTypeEnum.DRAFT.getValue();
+        validateArticleBeforePublish(articleType, publishArticleReqVO.getCover(), publishArticleReqVO.getCategoryId(), publishArticleReqVO.getTags());
+
+        Integer weight = 0;
+        if (Boolean.TRUE.equals(publishArticleReqVO.getIsTop())) {
+            ArticleDO maxWeightArticle = articleMapper.selectMaxWeight();
+            weight = Objects.nonNull(maxWeightArticle) && Objects.nonNull(maxWeightArticle.getWeight())
+                    ? maxWeightArticle.getWeight() + 1
+                    : 1;
+        }
+
         // 1. VO 转 ArticleDO, 并保存
         ArticleDO articleDO = ArticleDO.builder()
                 .title(publishArticleReqVO.getTitle())
                 .cover(publishArticleReqVO.getCover())
                 .summary(publishArticleReqVO.getSummary())
+                .type(articleType)
+                .isPrivate(Boolean.TRUE.equals(publishArticleReqVO.getIsPrivate()))
+                .weight(weight)
                 .createTime(LocalDateTime.now())
                 .updateTime(LocalDateTime.now())
                 .build();
@@ -117,26 +162,29 @@ public class AdminArticleServiceImpl implements AdminArticleService {
 
         // 3. 处理文章关联的分类
         Long categoryId = publishArticleReqVO.getCategoryId();
+        if (Objects.nonNull(categoryId)) {
+            // 3.1 校验提交的分类是否真实存在
+            CategoryDO categoryDO = categoryMapper.selectById(categoryId);
+            if (Objects.isNull(categoryDO)) {
+                log.warn("==> 分类不存在, categoryId: {}", categoryId);
+                throw new BizException(ResponseCodeEnum.CATEGORY_NOT_EXISTED);
+            }
 
-        // 3.1 校验提交的分类是否真实存在
-        CategoryDO categoryDO = categoryMapper.selectById(categoryId);
-        if (Objects.isNull(categoryDO)) {
-            log.warn("==> 分类不存在, categoryId: {}", categoryId);
-            throw new BizException(ResponseCodeEnum.CATEGORY_NOT_EXISTED);
+            ArticleCategoryRelDO articleCategoryRelDO = ArticleCategoryRelDO.builder()
+                    .articleId(articleId)
+                    .categoryId(categoryId)
+                    .build();
+            articleCategoryRelMapper.insert(articleCategoryRelDO);
         }
-
-        ArticleCategoryRelDO articleCategoryRelDO = ArticleCategoryRelDO.builder()
-                .articleId(articleId)
-                .categoryId(categoryId)
-                .build();
-        articleCategoryRelMapper.insert(articleCategoryRelDO);
 
         // 4. 保存文章关联的标签集合
         List<String> publishTags = publishArticleReqVO.getTags();
         insertTags(articleId, publishTags);
 
-        // 发送文章发布事件
-        eventPublisher.publishEvent(new PublishArticleEvent(this, articleId));
+        if (Objects.equals(articleType, ArticleTypeEnum.NORMAL.getValue())) {
+            // 发送文章发布事件
+            eventPublisher.publishEvent(new PublishArticleEvent(this, articleId));
+        }
 
         return Response.success();
     }
@@ -187,7 +235,7 @@ public class AdminArticleServiceImpl implements AdminArticleService {
         Integer type = findArticlePageListReqVO.getType();
 
         // 执行分页查询
-        Page<ArticleDO> articleDOPage = articleMapper.selectPageList(current, size, title, startDate, endDate, type);
+        Page<ArticleDO> articleDOPage = articleMapper.selectAdminPageList(current, size, title, startDate, endDate, type);
 
         List<ArticleDO> articleDOS = articleDOPage.getRecords();
 
@@ -200,6 +248,8 @@ public class AdminArticleServiceImpl implements AdminArticleService {
                             .title(articleDO.getTitle())
                             .cover(articleDO.getCover())
                             .createTime(articleDO.getCreateTime())
+                            .type(articleDO.getType())
+                            .isPrivate(Boolean.TRUE.equals(articleDO.getIsPrivate()))
                             .isTop(articleDO.getWeight() > 0) // 是否置顶
                             .build())
                     .collect(Collectors.toList());
@@ -238,8 +288,11 @@ public class AdminArticleServiceImpl implements AdminArticleService {
         // DO 转 VO
         FindArticleDetailRspVO vo = ArticleDetailConvert.INSTANCE.convertDO2VO(articleDO);
         vo.setContent(articleContentDO.getContent());
-        vo.setCategoryId(articleCategoryRelDO.getCategoryId());
+        vo.setCategoryId(Objects.nonNull(articleCategoryRelDO) ? articleCategoryRelDO.getCategoryId() : null);
         vo.setTagIds(tagIds);
+        vo.setType(articleDO.getType());
+        vo.setIsPrivate(Boolean.TRUE.equals(articleDO.getIsPrivate()));
+        vo.setIsTop(articleDO.getWeight() > 0);
 
         return Response.success(vo);
     }
@@ -255,12 +308,28 @@ public class AdminArticleServiceImpl implements AdminArticleService {
     public Response updateArticle(UpdateArticleReqVO updateArticleReqVO) {
         Long articleId = updateArticleReqVO.getId();
 
+        Integer articleType = Boolean.TRUE.equals(updateArticleReqVO.getIsPublish())
+                ? ArticleTypeEnum.NORMAL.getValue()
+                : ArticleTypeEnum.DRAFT.getValue();
+        validateArticleBeforePublish(articleType, updateArticleReqVO.getCover(), updateArticleReqVO.getCategoryId(), updateArticleReqVO.getTags());
+
+        Integer weight = Boolean.TRUE.equals(updateArticleReqVO.getIsTop()) ? 1 : 0;
+        if (Boolean.TRUE.equals(updateArticleReqVO.getIsTop())) {
+            ArticleDO maxWeightArticle = articleMapper.selectMaxWeight();
+            weight = Objects.nonNull(maxWeightArticle) && Objects.nonNull(maxWeightArticle.getWeight())
+                    ? maxWeightArticle.getWeight() + 1
+                    : 1;
+        }
+
         // 1. VO 转 ArticleDO, 并更新
         ArticleDO articleDO = ArticleDO.builder()
                 .id(articleId)
                 .title(updateArticleReqVO.getTitle())
                 .cover(updateArticleReqVO.getCover())
                 .summary(updateArticleReqVO.getSummary())
+                .type(articleType)
+                .isPrivate(Boolean.TRUE.equals(updateArticleReqVO.getIsPrivate()))
+                .weight(weight)
                 .updateTime(LocalDateTime.now())
                 .build();
         int count = articleMapper.updateById(articleDO);
@@ -282,20 +351,22 @@ public class AdminArticleServiceImpl implements AdminArticleService {
         // 3. 更新文章分类
         Long categoryId = updateArticleReqVO.getCategoryId();
 
-        // 3.1 校验提交的分类是否真实存在
-        CategoryDO categoryDO = categoryMapper.selectById(categoryId);
-        if (Objects.isNull(categoryDO)) {
-            log.warn("==> 分类不存在, categoryId: {}", categoryId);
-            throw new BizException(ResponseCodeEnum.CATEGORY_NOT_EXISTED);
-        }
-
-        // 先删除该文章关联的分类记录，再插入新的关联关系
+        // 先删除该文章关联的分类记录，再按需插入新的关联关系
         articleCategoryRelMapper.deleteByArticleId(articleId);
-        ArticleCategoryRelDO articleCategoryRelDO = ArticleCategoryRelDO.builder()
-                .articleId(articleId)
-                .categoryId(categoryId)
-                .build();
-        articleCategoryRelMapper.insert(articleCategoryRelDO);
+        if (Objects.nonNull(categoryId)) {
+            // 3.1 校验提交的分类是否真实存在
+            CategoryDO categoryDO = categoryMapper.selectById(categoryId);
+            if (Objects.isNull(categoryDO)) {
+                log.warn("==> 分类不存在, categoryId: {}", categoryId);
+                throw new BizException(ResponseCodeEnum.CATEGORY_NOT_EXISTED);
+            }
+
+            ArticleCategoryRelDO articleCategoryRelDO = ArticleCategoryRelDO.builder()
+                    .articleId(articleId)
+                    .categoryId(categoryId)
+                    .build();
+            articleCategoryRelMapper.insert(articleCategoryRelDO);
+        }
 
         // 4. 保存文章关联的标签集合
         // 先删除该文章对应的标签
@@ -303,10 +374,26 @@ public class AdminArticleServiceImpl implements AdminArticleService {
         List<String> publishTags = updateArticleReqVO.getTags();
         insertTags(articleId, publishTags);
 
-        // 发布文章修改事件
         eventPublisher.publishEvent(new UpdateArticleEvent(this, articleId));
 
         return Response.success();
+    }
+
+    /**
+     * 发布前校验必填信息
+     * @param articleType
+     * @param cover
+     * @param categoryId
+     * @param tags
+     */
+    private void validateArticleBeforePublish(Integer articleType, String cover, Long categoryId, List<String> tags) {
+        if (!Objects.equals(articleType, ArticleTypeEnum.NORMAL.getValue())) {
+            return;
+        }
+
+        if (!StringUtils.hasText(cover) || Objects.isNull(categoryId) || CollectionUtils.isEmpty(tags)) {
+            throw new BizException(ResponseCodeEnum.ARTICLE_PUBLISH_PARAM_NOT_VALID);
+        }
     }
 
     /**
@@ -315,6 +402,10 @@ public class AdminArticleServiceImpl implements AdminArticleService {
      * @param publishTags
      */
     private void insertTags(Long articleId, List<String> publishTags) {
+        if (CollectionUtils.isEmpty(publishTags)) {
+            return;
+        }
+
         // 筛选提交的标签（表中不存在的标签）
         List<String> notExistTags = null;
         // 筛选提交的标签（表中已存在的标签）

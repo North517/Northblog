@@ -54,4 +54,19 @@ public class FindArticleDetailRspVO {
      */
     private String summary;
 
+    /**
+     * 文章状态：0 草稿，1 已发布
+     */
+    private Integer type;
+
+    /**
+     * 是否私密：false 公开，true 私密
+     */
+    private Boolean isPrivate;
+
+    /**
+     * 是否置顶
+     */
+    private Boolean isTop;
+
 }

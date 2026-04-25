@@ -7,6 +7,7 @@ import com.quanxiaoha.weblog.common.domain.dos.ArticleContentDO;
 import com.quanxiaoha.weblog.common.domain.dos.ArticleDO;
 import com.quanxiaoha.weblog.common.domain.mapper.ArticleContentMapper;
 import com.quanxiaoha.weblog.common.domain.mapper.ArticleMapper;
+import com.quanxiaoha.weblog.common.enums.ArticleTypeEnum;
 import com.quanxiaoha.weblog.search.LuceneHelper;
 import com.quanxiaoha.weblog.search.index.ArticleIndex;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /**
  * @Author: North001
@@ -51,6 +53,11 @@ public class PublishArticleSubscriber implements ApplicationListener<PublishArti
 
         // 搜索新发布的文章
         ArticleDO articleDO = articleMapper.selectById(articleId);
+        if (articleDO == null || !ArticleTypeEnum.NORMAL.getValue().equals(articleDO.getType()) || Boolean.TRUE.equals(articleDO.getIsPrivate())) {
+            log.info("==> 文章未发布或为私密文章，不添加 Lucene 文档，articleId: {}", articleId);
+            return;
+        }
+
         // 这里也将文字正文保存到了文档中，但是检索的时候并没有查询正文，小伙伴们可自行决定是否要将正文，添加到检索字段中
         ArticleContentDO articleContentDO = articleContentMapper.selectByArticleId(articleId);
 
@@ -58,8 +65,8 @@ public class PublishArticleSubscriber implements ApplicationListener<PublishArti
         Document document = new Document();
         document.add(new TextField(ArticleIndex.COLUMN_ID, String.valueOf(articleId), Field.Store.YES));
         document.add(new TextField(ArticleIndex.COLUMN_TITLE, articleDO.getTitle(), Field.Store.YES));
-        document.add(new TextField(ArticleIndex.COLUMN_COVER, articleDO.getCover(), Field.Store.YES));
-        document.add(new TextField(ArticleIndex.COLUMN_SUMMARY, articleDO.getSummary(), Field.Store.YES));
+        document.add(new TextField(ArticleIndex.COLUMN_COVER, StringUtils.hasText(articleDO.getCover()) ? articleDO.getCover() : "", Field.Store.YES));
+        document.add(new TextField(ArticleIndex.COLUMN_SUMMARY, StringUtils.hasText(articleDO.getSummary()) ? articleDO.getSummary() : "", Field.Store.YES));
         document.add(new TextField(ArticleIndex.COLUMN_CONTENT, articleContentDO.getContent(), Field.Store.YES));
         document.add(new TextField(ArticleIndex.COLUMN_CREATE_TIME, Constants.DATE_TIME_FORMATTER.format(articleDO.getCreateTime()), Field.Store.YES));
 

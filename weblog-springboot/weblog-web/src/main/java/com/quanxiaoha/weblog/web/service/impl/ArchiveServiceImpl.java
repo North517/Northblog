@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.google.common.collect.Lists;
 import com.quanxiaoha.weblog.common.domain.dos.ArticleDO;
 import com.quanxiaoha.weblog.common.domain.mapper.ArticleMapper;
+import com.quanxiaoha.weblog.common.enums.ArticleTypeEnum;
 import com.quanxiaoha.weblog.common.utils.PageResponse;
 import com.quanxiaoha.weblog.common.utils.Response;
 import com.quanxiaoha.weblog.web.convert.ArticleConvert;
@@ -45,7 +46,7 @@ public class ArchiveServiceImpl implements ArchiveService {
         Long size = findArchiveArticlePageListReqVO.getSize();
 
         // 分页查询
-        IPage<ArticleDO> page = articleMapper.selectPageList(current, size, null, null, null);
+        IPage<ArticleDO> page = articleMapper.selectPageList(current, size, null, null, null, ArticleTypeEnum.NORMAL.getValue());
         List<ArticleDO> articleDOS = page.getRecords();
 
         List<FindArchiveArticlePageListRspVO> vos = Lists.newArrayList();

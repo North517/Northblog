@@ -43,4 +43,6 @@ public class ArticleDO {
     private Integer weight;
 
     private Integer type;
+
+    private Boolean isPrivate;
 }

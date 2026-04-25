@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.quanxiaoha.weblog.common.domain.dos.ArticleDO;
 import com.quanxiaoha.weblog.common.domain.dos.ArticlePublishCountDO;
+import com.quanxiaoha.weblog.common.enums.ArticleTypeEnum;
 import org.apache.ibatis.annotations.Select;
 
 import java.time.LocalDate;
@@ -75,6 +76,36 @@ public interface ArticleMapper extends BaseMapper<ArticleDO> {
     }
 
     /**
+     * 根据文章 ID 批量分页查询已发布文章
+     * @param current
+     * @param size
+     * @param articleIds
+     * @return
+     */
+    default Page<ArticleDO> selectPublishedPublicPageListByArticleIds(Long current, Long size, List<Long> articleIds) {
+        Page<ArticleDO> page = new Page<>(current, size);
+
+        LambdaQueryWrapper<ArticleDO> wrapper = Wrappers.<ArticleDO>lambdaQuery()
+                .in(ArticleDO::getId, articleIds)
+                .eq(ArticleDO::getType, ArticleTypeEnum.NORMAL.getValue())
+                .eq(ArticleDO::getIsPrivate, false)
+                .orderByDesc(ArticleDO::getCreateTime);
+
+        return selectPage(page, wrapper);
+    }
+
+    /**
+     * 查询已发布文章阅读量
+     * @return
+     */
+    default List<ArticleDO> selectPublishedReadNum() {
+        return selectList(Wrappers.<ArticleDO>lambdaQuery()
+                .select(ArticleDO::getReadNum)
+                .eq(ArticleDO::getType, ArticleTypeEnum.NORMAL.getValue())
+                .eq(ArticleDO::getIsPrivate, false));
+    }
+
+    /**
      * 查询上一篇文章
      * @param articleId
      * @return
@@ -96,6 +127,34 @@ public interface ArticleMapper extends BaseMapper<ArticleDO> {
                 .orderByDesc(ArticleDO::getId) // 按文章 ID 倒序排列
                 .lt(ArticleDO::getId, articleId) // 查询比当前文章 ID 小的
                 .last("limit 1")); // 第一条记录即为下一篇文章
+    }
+
+    /**
+     * 查询已发布的上一篇文章
+     * @param articleId
+     * @return
+     */
+    default ArticleDO selectPrePublishedArticle(Long articleId) {
+        return selectOne(Wrappers.<ArticleDO>lambdaQuery()
+                .eq(ArticleDO::getType, ArticleTypeEnum.NORMAL.getValue())
+                .eq(ArticleDO::getIsPrivate, false)
+                .orderByAsc(ArticleDO::getId)
+                .gt(ArticleDO::getId, articleId)
+                .last("limit 1"));
+    }
+
+    /**
+     * 查询已发布的下一篇文章
+     * @param articleId
+     * @return
+     */
+    default ArticleDO selectNextPublishedArticle(Long articleId) {
+        return selectOne(Wrappers.<ArticleDO>lambdaQuery()
+                .eq(ArticleDO::getType, ArticleTypeEnum.NORMAL.getValue())
+                .eq(ArticleDO::getIsPrivate, false)
+                .orderByDesc(ArticleDO::getId)
+                .lt(ArticleDO::getId, articleId)
+                .last("limit 1"));
     }
 
     /**
@@ -143,6 +202,30 @@ public interface ArticleMapper extends BaseMapper<ArticleDO> {
     }
 
     /**
+     * 后台分页查询
+     * @param current
+     * @param size
+     * @param title
+     * @param startDate
+     * @param endDate
+     * @return
+     */
+    default Page<ArticleDO> selectAdminPageList(Long current, Long size, String title,
+                                            LocalDate startDate, LocalDate endDate, Integer type) {
+        Page<ArticleDO> page = new Page<>(current, size);
+
+        LambdaQueryWrapper<ArticleDO> wrapper = Wrappers.<ArticleDO>lambdaQuery()
+                .like(StringUtils.isNotBlank(title), ArticleDO::getTitle, title)
+                .ge(Objects.nonNull(startDate), ArticleDO::getCreateTime, startDate)
+                .le(Objects.nonNull(endDate), ArticleDO::getCreateTime, endDate)
+                .eq(Objects.nonNull(type), ArticleDO::getType, type)
+                .orderByDesc(ArticleDO::getWeight)
+                .orderByDesc(ArticleDO::getCreateTime);
+
+        return selectPage(page, wrapper);
+    }
+
+    /**
      * 分页查询
      * @param current
      * @param size
@@ -162,6 +245,7 @@ public interface ArticleMapper extends BaseMapper<ArticleDO> {
                 .ge(Objects.nonNull(startDate), ArticleDO::getCreateTime, startDate) // 大于等于 startDate
                 .le(Objects.nonNull(endDate), ArticleDO::getCreateTime, endDate)  // 小于等于 endDate
                 .eq(Objects.nonNull(type), ArticleDO::getType, type) // 文章类型
+                .eq(ArticleDO::getIsPrivate, false)
                 .orderByDesc(ArticleDO::getWeight) // 按权重倒序
                 .orderByDesc(ArticleDO::getCreateTime); // 按创建时间倒叙
 

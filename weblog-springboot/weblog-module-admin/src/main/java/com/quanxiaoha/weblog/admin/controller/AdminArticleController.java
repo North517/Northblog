@@ -36,6 +36,14 @@ public class AdminArticleController {
         return articleService.updateArticleIsTop(updateArticleIsTopReqVO);
     }
 
+    @PostMapping("/privacy/update")
+    @ApiOperation(value = "更新文章公开私密状态")
+    @ApiOperationLog(description = "更新文章公开私密状态")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public Response updateArticlePrivacy(@RequestBody @Validated UpdateArticlePrivacyReqVO updateArticlePrivacyReqVO) {
+        return articleService.updateArticlePrivacy(updateArticlePrivacyReqVO);
+    }
+
     @PostMapping("/publish")
     @ApiOperation(value = "文章发布")
     @ApiOperationLog(description = "文章发布")

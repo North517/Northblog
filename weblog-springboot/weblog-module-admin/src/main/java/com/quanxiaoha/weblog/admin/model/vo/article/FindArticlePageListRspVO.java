@@ -44,4 +44,14 @@ public class FindArticlePageListRspVO  {
      */
     private Boolean isTop;
 
+    /**
+     * 文章状态：0 草稿，1 已发布
+     */
+    private Integer type;
+
+    /**
+     * 是否私密：false 公开，true 私密
+     */
+    private Boolean isPrivate;
+
 }

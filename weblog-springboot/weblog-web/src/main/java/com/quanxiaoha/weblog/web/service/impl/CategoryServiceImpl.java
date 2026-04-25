@@ -111,7 +111,7 @@ public class CategoryServiceImpl implements CategoryService {
         List<Long> articleIds = articleCategoryRelDOS.stream().map(ArticleCategoryRelDO::getArticleId).collect(Collectors.toList());
 
         // 根据文章 ID 集合查询文章分页数据
-        Page<ArticleDO> page = articleMapper.selectPageListByArticleIds(current, size, articleIds);
+        Page<ArticleDO> page = articleMapper.selectPublishedPublicPageListByArticleIds(current, size, articleIds);
         List<ArticleDO> articleDOS = page.getRecords();
 
         // DO 转 VO

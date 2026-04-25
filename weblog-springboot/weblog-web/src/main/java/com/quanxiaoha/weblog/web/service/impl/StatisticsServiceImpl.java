@@ -5,6 +5,7 @@ import com.quanxiaoha.weblog.common.domain.dos.ArticleDO;
 import com.quanxiaoha.weblog.common.domain.mapper.ArticleMapper;
 import com.quanxiaoha.weblog.common.domain.mapper.CategoryMapper;
 import com.quanxiaoha.weblog.common.domain.mapper.TagMapper;
+import com.quanxiaoha.weblog.common.enums.ArticleTypeEnum;
 import com.quanxiaoha.weblog.common.utils.Response;
 import com.quanxiaoha.weblog.web.model.vo.statistics.FindStatisticsInfoRspVO;
 import com.quanxiaoha.weblog.web.service.StatisticsService;
@@ -40,7 +41,8 @@ public class StatisticsServiceImpl implements StatisticsService {
     @Override
     public Response findInfo() {
         // 查询文章总数
-        Long articleTotalCount = articleMapper.selectCount(Wrappers.emptyWrapper());
+        Long articleTotalCount = articleMapper.selectCount(Wrappers.<ArticleDO>lambdaQuery()
+                .eq(ArticleDO::getType, ArticleTypeEnum.NORMAL.getValue()));
 
         // 查询分类总数
         Long categoryTotalCount = categoryMapper.selectCount(Wrappers.emptyWrapper());
@@ -49,7 +51,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         Long tagTotalCount = tagMapper.selectCount(Wrappers.emptyWrapper());
 
         // 总浏览量
-        List<ArticleDO> articleDOS = articleMapper.selectAllReadNum();
+        List<ArticleDO> articleDOS = articleMapper.selectPublishedReadNum();
         Long pvTotalCount = 0L;
 
         if (!CollectionUtils.isEmpty(articleDOS)) {

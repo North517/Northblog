@@ -18,6 +18,13 @@ public interface AdminArticleService {
     Response updateArticleIsTop(UpdateArticleIsTopReqVO updateArticleIsTopReqVO);
 
     /**
+     * 更新文章私密状态
+     * @param updateArticlePrivacyReqVO
+     * @return
+     */
+    Response updateArticlePrivacy(UpdateArticlePrivacyReqVO updateArticlePrivacyReqVO);
+
+    /**
      * 发布文章
      * @param publishArticleReqVO
      * @return

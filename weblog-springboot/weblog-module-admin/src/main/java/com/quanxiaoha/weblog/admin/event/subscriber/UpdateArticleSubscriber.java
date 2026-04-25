@@ -6,6 +6,7 @@ import com.quanxiaoha.weblog.common.domain.dos.ArticleContentDO;
 import com.quanxiaoha.weblog.common.domain.dos.ArticleDO;
 import com.quanxiaoha.weblog.common.domain.mapper.ArticleContentMapper;
 import com.quanxiaoha.weblog.common.domain.mapper.ArticleMapper;
+import com.quanxiaoha.weblog.common.enums.ArticleTypeEnum;
 import com.quanxiaoha.weblog.search.LuceneHelper;
 import com.quanxiaoha.weblog.search.index.ArticleIndex;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /**
  * @Author: North001
@@ -49,19 +51,26 @@ public class UpdateArticleSubscriber implements ApplicationListener<UpdateArticl
 
         // 查询文章数据
         ArticleDO articleDO = articleMapper.selectById(articleId);
+
+        // 更新条件（通过文章 ID 来更新）
+        Term condition = new Term(ArticleIndex.COLUMN_ID, String.valueOf(articleId));
+
+        if (articleDO == null || !ArticleTypeEnum.NORMAL.getValue().equals(articleDO.getType()) || Boolean.TRUE.equals(articleDO.getIsPrivate())) {
+            long count = luceneHelper.deleteDocument(ArticleIndex.NAME, condition);
+            log.info("==> 删除草稿或私密文章对应 Lucene 文档结束，articleId: {}，受影响行数: {}", articleId, count);
+            return;
+        }
+
         ArticleContentDO articleContentDO = articleContentMapper.selectByArticleId(articleId);
 
         // 构建文档
         Document document = new Document();
         document.add(new TextField(ArticleIndex.COLUMN_ID, String.valueOf(articleId), Field.Store.YES));
         document.add(new TextField(ArticleIndex.COLUMN_TITLE, articleDO.getTitle(), Field.Store.YES));
-        document.add(new TextField(ArticleIndex.COLUMN_COVER, articleDO.getCover(), Field.Store.YES));
-        document.add(new TextField(ArticleIndex.COLUMN_SUMMARY, articleDO.getSummary(), Field.Store.YES));
+        document.add(new TextField(ArticleIndex.COLUMN_COVER, StringUtils.hasText(articleDO.getCover()) ? articleDO.getCover() : "", Field.Store.YES));
+        document.add(new TextField(ArticleIndex.COLUMN_SUMMARY, StringUtils.hasText(articleDO.getSummary()) ? articleDO.getSummary() : "", Field.Store.YES));
         document.add(new TextField(ArticleIndex.COLUMN_CONTENT, articleContentDO.getContent(), Field.Store.YES));
         document.add(new TextField(ArticleIndex.COLUMN_CREATE_TIME, Constants.DATE_TIME_FORMATTER.format(articleDO.getCreateTime()), Field.Store.YES));
-
-        // 更新条件（通过文章 ID 来更新）
-        Term condition = new Term(ArticleIndex.COLUMN_ID, String.valueOf(articleId));
 
         long count = luceneHelper.updateDocument(ArticleIndex.NAME, document, condition);
 
