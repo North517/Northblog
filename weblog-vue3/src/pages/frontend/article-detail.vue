@@ -4,8 +4,12 @@
   <!-- 文章标题、标签、Meta 信息 -->
   <div class="bg-white dark:bg-gray-900">
     <div class="max-w-screen-xl flex flex-col flex-wrap mx-auto px-4 md:px-6 pb-5 pt-10">
-      <!-- 标签集合 -->
-      <div v-if="article.tags && article.tags.length > 0" class="mb-5">
+      <!-- 分类和标签集合 -->
+      <div v-if="article.categoryName || (article.tags && article.tags.length > 0)" class="mb-5">
+        <span v-if="article.categoryName" @click="goCategoryArticleListPage(article.categoryId, article.categoryName)"
+          class="inline-block mb-1 cursor-pointer bg-green-100 text-green-800 text-sm font-medium me-2 px-2.5 py-0.5 rounded-md hover:bg-green-200 hover:text-green-900 dark:bg-green-900 dark:hover:bg-green-950 dark:text-green-300 transition-colors">
+          分类：{{ article.categoryName }}
+        </span>
         <span @click="goTagArticleListPage(tag.id, tag.name)" v-for="(tag, index) in article.tags" :key="index"
           class="inline-block mb-1 cursor-pointer bg-green-100 text-green-800 text-sm font-medium me-2 px-2.5 py-0.5 rounded-md hover:bg-green-200 hover:text-green-900 dark:bg-green-900 dark:hover:bg-green-950 dark:text-green-300 transition-colors">
           # {{ tag.name }}
@@ -203,17 +207,6 @@
 
       <!-- 右边侧边栏，占用一列 -->
       <aside class="col-span-4 md:col-span-1">
-        <div>
-          <!-- 博主信息 -->
-          <UserInfoCard></UserInfoCard>
-
-          <!-- 分类 -->
-          <CategoryListCard></CategoryListCard>
-
-          <!-- 标签 -->
-          <TagListCard></TagListCard>
-        </div>
-
         <!-- 文章目录 -->
         <Toc></Toc>
       </aside>
@@ -229,9 +222,9 @@
 <script setup>
 import Header from "@/layouts/frontend/components/Header.vue";
 import Footer from "@/layouts/frontend/components/Footer.vue";
-import UserInfoCard from "@/layouts/frontend/components/UserInfoCard.vue";
-import TagListCard from "@/layouts/frontend/components/TagListCard.vue";
-import CategoryListCard from "@/layouts/frontend/components/CategoryListCard.vue";
+
+
+
 import ScrollToTopButton from "@/layouts/frontend/components/ScrollToTopButton.vue";
 import Toc from "@/layouts/frontend/components/Toc.vue";
 import Comment from '@/components/Comment.vue'

@@ -124,8 +124,21 @@
                 </el-form-item>
                 <el-form-item label="内容" prop="content">
                     <!-- Markdown 编辑器 -->
-                    <div class="article-md-editor" @paste.capture="handlePublishEditorPaste">
-                        <MdEditor v-model="form.content" @onUploadImg="onUploadImg" editorId="publishArticleEditor" />
+                    <div class="article-editor-with-toc">
+                        <div class="article-md-editor" @paste.capture="handlePublishEditorPaste">
+                            <MdEditor v-model="form.content" @onUploadImg="onUploadImg" editorId="publishArticleEditor" />
+                        </div>
+                        <div class="admin-editor-toc">
+                            <div class="admin-editor-toc-title">文章目录</div>
+                            <div v-if="publishEditorToc.length > 0" class="admin-editor-toc-list">
+                                <button v-for="item in publishEditorToc" :key="item.lineIndex" type="button"
+                                    class="admin-editor-toc-item" :style="{ paddingLeft: `${item.indent}px` }"
+                                    @click="jumpToMarkdownHeading('publishArticleEditor', item.lineIndex)">
+                                    {{ item.text }}
+                                </button>
+                            </div>
+                            <div v-else class="admin-editor-toc-empty">暂无目录，请在正文中添加标题</div>
+                        </div>
                     </div>
                 </el-form-item>
                 <el-form-item label="封面" prop="cover">
@@ -198,9 +211,22 @@
                 </el-form-item>
                 <el-form-item label="内容" prop="content">
                     <!-- Markdown 编辑器 -->
-                    <div class="article-md-editor" @paste.capture="handleUpdateEditorPaste">
-                        <MdEditor v-model="updateArticleForm.content" @onUploadImg="onUploadImg"
-                            editorId="updateArticleEditor" />
+                    <div class="article-editor-with-toc">
+                        <div class="article-md-editor" @paste.capture="handleUpdateEditorPaste">
+                            <MdEditor v-model="updateArticleForm.content" @onUploadImg="onUploadImg"
+                                editorId="updateArticleEditor" />
+                        </div>
+                        <div class="admin-editor-toc">
+                            <div class="admin-editor-toc-title">文章目录</div>
+                            <div v-if="updateEditorToc.length > 0" class="admin-editor-toc-list">
+                                <button v-for="item in updateEditorToc" :key="item.lineIndex" type="button"
+                                    class="admin-editor-toc-item" :style="{ paddingLeft: `${item.indent}px` }"
+                                    @click="jumpToMarkdownHeading('updateArticleEditor', item.lineIndex)">
+                                    {{ item.text }}
+                                </button>
+                            </div>
+                            <div v-else class="admin-editor-toc-empty">暂无目录，请在正文中添加标题</div>
+                        </div>
                     </div>
                 </el-form-item>
                 <el-form-item label="封面" prop="cover">
@@ -241,7 +267,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick } from 'vue'
+import { ref, reactive, nextTick, computed } from 'vue'
 import { Search, RefreshRight, View, Hide } from '@element-plus/icons-vue'
 import { getArticlePageList, deleteArticle, publishArticle, getArticleDetail, updateArticle, updateArticlePrivacy } from '@/api/admin/article'
 import { uploadFile } from '@/api/admin/file'
@@ -412,6 +438,64 @@ const rules = {
     cover: [{ required: true }],
     categoryId: [{ required: true, message: '请选择文章分类', trigger: 'blur' }],
     tags: [{ required: true, message: '请选择文章标签', trigger: 'blur' }],
+}
+
+const parseMarkdownToc = (content) => {
+    if (!content) {
+        return []
+    }
+
+    return content
+        .split('\n')
+        .map((line, lineIndex) => {
+            const matched = line.match(/^(#{1,4})\s+(.+)$/)
+            if (!matched) {
+                return null
+            }
+
+            const level = matched[1].length
+            const text = matched[2].replace(/#+\s*$/, '').trim()
+            if (!text) {
+                return null
+            }
+
+            return {
+                level,
+                text,
+                lineIndex,
+                indent: (level - 1) * 14
+            }
+        })
+        .filter(Boolean)
+}
+
+const publishEditorToc = computed(() => parseMarkdownToc(form.content))
+const updateEditorToc = computed(() => parseMarkdownToc(updateArticleForm.content))
+
+const getCursorPositionByLineIndex = (content, lineIndex) => {
+    if (lineIndex <= 0) {
+        return 0
+    }
+
+    const lines = content.split('\n')
+    return lines.slice(0, lineIndex).reduce((position, line) => position + line.length + 1, 0)
+}
+
+const jumpToMarkdownHeading = async (editorId, lineIndex) => {
+    const targetForm = editorId === 'publishArticleEditor' ? form : updateArticleForm
+    const textarea = getEditorTextarea(editorId)
+    if (!textarea || typeof textarea.setSelectionRange !== 'function') {
+        return
+    }
+
+    const position = getCursorPositionByLineIndex(targetForm.content || '', lineIndex)
+
+    await nextTick()
+    textarea.focus()
+    textarea.setSelectionRange(position, position)
+
+    const lineHeight = 24
+    textarea.scrollTop = Math.max(lineIndex * lineHeight - textarea.clientHeight / 3, 0)
 }
 
 // 上传文章封面图片
@@ -797,6 +881,80 @@ const handlePrivacyChange = (row) => {
 /* 指定 select 下拉框宽度 */
 .el-select--large {
     width: 600px;
+}
+
+.article-editor-with-toc {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 16px;
+    width: 100%;
+}
+
+.article-md-editor {
+    min-width: 0;
+}
+
+.admin-editor-toc {
+    position: sticky;
+    top: 74px;
+    align-self: flex-start;
+    max-height: 620px;
+    padding: 14px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.admin-editor-toc-title {
+    margin-bottom: 10px;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.admin-editor-toc-list {
+    max-height: 560px;
+    overflow-y: auto;
+}
+
+.admin-editor-toc-item {
+    display: block;
+    width: 100%;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    color: #6b7280;
+    font-size: 13px;
+    line-height: 22px;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.admin-editor-toc-item:hover {
+    color: #0284c7;
+}
+
+.admin-editor-toc-empty {
+    color: #9ca3af;
+    font-size: 13px;
+    line-height: 22px;
+}
+
+@media (max-width: 1024px) {
+    .article-editor-with-toc {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-editor-toc {
+        position: static;
+        max-height: 240px;
+    }
+
+    .admin-editor-toc-list {
+        max-height: 180px;
+    }
 }
 </style>
 
